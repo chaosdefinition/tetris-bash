@@ -106,10 +106,11 @@ coord_column=$(( ($column_count - 4) / 2 ))
 speed=0
 
 # Keyboard control strings
-up=`echo -en "\e[A"`
-down=`echo -en "\e[B"`
-left=`echo -en "\e[D"`
-right=`echo -en "\e[C"`
+esc=`echo -en "\e"`
+up=`echo -en "[A"`
+down=`echo -en "[B"`
+left=`echo -en "[D"`
+right=`echo -en "[C"`
 
 ############################# Shell operations #################################
 
@@ -239,19 +240,19 @@ function do_keyboard_operation {
 		$esc )
 			read -s -n 2 -t 0.001
 			case $REPLY in
-				"[A" )
+				$up )
 					do_on_key_up
 					;;
 
-				"[B" )
+				$down )
 					do_on_key_down
 					;;
 
-				"[D" )
+				$left )
 					do_on_key_left
 					;;
 
-				"[C" )
+				$right )
 					do_on_key_right
 					;;
 
