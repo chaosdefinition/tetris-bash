@@ -21,17 +21,17 @@
 ############################# Data area ########################################
 
 # Width and height
-row_count=20
-column_count=10
-if [[ `tput lines` -lt $row_count || `tput cols` -lt $(( $column_count * 2 + 12 )) ]]; then
+rows=20
+cols=10
+if [[ `tput lines` -lt $rows || `tput cols` -lt $(( $cols * 2 + 12 )) ]]; then
 	echo "$0: the size of this terminal is too small to run this game"
 	exit 1
 fi
 
 # Initialize game map
-for (( i = 0; i < $row_count; ++i )); do
-	for (( j = 0; j < $column_count; ++j )); do
-		map[ $(( $column_count * i + j )) ]=0
+for (( i = 0; i < $rows; ++i )); do
+	for (( j = 0; j < $cols; ++j )); do
+		map[ $(( $cols * i + j )) ]=0
 	done
 done
 
@@ -99,8 +99,8 @@ next_num=0
 next_color=0
 
 # Initial coordinate of block in map
-coord_row=0
-coord_column=$(( ($column_count - 4) / 2 ))
+row=0
+col=$(( ($cols - 4) / 2 ))
 
 # Initial speed
 speed=0
@@ -142,18 +142,18 @@ function init_environment {
 	trap "restore_environment 'Game interrupted.'" SIGINT SIGQUIT
 }
 
-# Move cursor to (x, y)
+# Move cursor to (row, col)
 #
-# $1: x ranging from 1 to `tputs cols`
-# $2: y ranging from 1 to `tputs lines`
+# $1: row number ranging from 1 to `tputs lines`
+# $2: column number ranging from 1 to `tputs cols`
 function move_to_coordinate {
 	echo -en "\e[$1;$2f"
 }
 
-# Move cursor to map(x, y)
+# Move cursor to map(row, col)
 #
-# $1: x ranging from 0 to $(( column_count - 1 ))
-# $2: y ranging from 0 to $(( row_count - 1 ))
+# $1: row number ranging from 0 to $(( $rows - 1 ))
+# $2: column number ranging from 0 to $(( $cols - 1 ))
 function move_to {
 	move_to_coordinate $(( $1 + 2 )) $(( $2 * 2 + 2 ))
 }
@@ -181,11 +181,13 @@ function print_background_char {
 
 # Print a block
 #
-# $1: x
-# $2: y
+# $1: row number ranging from 0 to $(( $rows - 1 ))
+# $2: column number ranging from 0 to $(( $cols - 1 ))
 # $3: color
 # $4: pattern array
 function print_block {
+	local i=0
+	local j=0
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
 			move_to $(( $1 + i )) $(( $2 + j ))
@@ -200,42 +202,217 @@ function print_block {
 
 # Print the next block
 function print_next_block {
-	print_block 0 $(( $column_count + 1 )) $next_color next
+	print_block 0 $(( $cols + 1 )) $next_color next
 }
 
 # Print the whole map
 function print_map {
-	for (( i = 0; i < $row_count; ++i )); do
-		for (( j = 0; j < $column_count; ++j )); do
-			if (( ${map[ $column_count * i + j ]} == 0 )); then
+	local i=0
+	local j=0
+	for (( i = 0; i < $rows; ++i )); do
+		for (( j = 0; j < $cols; ++j )); do
+			if (( ${map[ $cols * i + j ]} == 0 )); then
 				print_background_square
 			else
-				print_square $(( ${map[ $column_count * i + j ]} ))
+				print_square $(( ${map[ $cols * i + j ]} ))
 			fi
 		done
 	done
 }
 
+# Printing method invoked after block rotates
+function print_up {
+	local i=0
+	local j=0
+	for (( i = 0; i < 4; ++i )); do
+		if (( $row + i >= $rows )); then
+			continue
+		fi
+		for (( j = 0; j < 4; ++j )); do
+			if (( $col + j < 0 || $col + j >= $cols )); then
+				continue
+			fi
+			move_to $(( $row + i )) $(( $col + j ))
+			if (( ${current[ 4 * i + j ]} != 0 )); then
+				print_square $current_color
+			else
+				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
+					print_square $(( ${map[ $cols * ($row + i) + $col + j ]} ))
+				else
+					print_background_square
+				fi
+			fi
+		done
+	done
+}
+
+# Printing method invoked after block falls down to surface
+#
+# $1: distance to fall
+function print_down {
+	local i=0
+	local j=0
+	for (( i = 0; i < 4; ++i )); do
+		if (( $row + i >= $rows )); then
+			continue
+		fi
+		for (( j = 0; j < 4; ++j )); do
+			if (( $col + j < 0 || $col + j >= $cols )); then
+				continue
+			fi
+			if (( ${map[ $cols * ($row + i) + $col + j ]} == 0 )); then
+				move_to $(( $row + i )) $(( $col + j ))
+				print_background_square
+			fi
+		done
+	done
+
+	(( row += $1 ))
+	for (( i = 0; i < 4; ++i )); do
+		if (( $row + i >= $rows )); then
+			continue
+		fi
+		for (( j = 0; j < 4; ++j )); do
+			if (( $col + j < 0 || $col + j >= $cols )); then
+				continue
+			fi
+			move_to $(( $row + i )) $(( $col + j ))
+			if (( ${current[ 4 * i + j ]} != 0 )); then
+				print_square $current_color
+			else
+				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
+					print_square $(( ${map[ $cols * ($row + i) + $col + j ]} ))
+				else
+					print_background_square
+				fi
+			fi
+		done
+	done
+}
+
+# Printing method invoked after block moves 1 square horizontally
+#
+# $1: 0 if move to right, 1 if move to right
+function print_horizontal {
+	local i=0
+	local j=0
+
+	for (( i = 0; i < 4; ++i )); do
+		if (( $row + i >= $rows )); then
+			continue
+		fi
+		for (( j = 0; j < 4; ++j )); do
+			if (( $col + j < 0 || $col + j >= $cols )); then
+				continue
+			fi
+			move_to $(( $row + i )) $(( $col + j ))
+			if (( ${current[ 4 * i + j ]} != 0 )); then
+				print_square $current_color
+			else
+				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
+					print_square $(( ${map[ $cols * ($row + i) + $col + j ]} ))
+				else
+					print_background_square
+				fi
+			fi
+		done
+		j=$(( $1 == 0 ? $col + 4 : $col - 1 ))
+		if (( $j >= 0 && $j < $cols && ${map[ $cols * ($row + i) + $j ]} == 0 )); then
+			move_to $(( $row + i )) $j
+			print_background_square
+		fi
+	done
+}
+
 ############################# Keyboard control #################################
 
+# Stuffs to do when up key is hit
 function do_on_key_up {
-	true
+	local i=0
+	local j=0
+
+	rotated=$(( $current_num % 4 < 3 ? $current_num + 1 : $current_num - 3 ))
+	for (( i = 0; i < 4; ++i )); do
+		for (( j = 0; j < 4; ++j )); do
+			if (( ${blocks[ 16 * $rotated + 4 * i + j ]} == 1 )); then
+				if (( $row + i >= $rows || $col + j < 0 || $col + j >= $cols )); then
+					return
+				fi
+				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
+					return
+				fi
+			fi
+		done
+	done
+
+	current_num=$rotated
+	for (( i = 0; i < 16; ++i )); do
+		current[ $i ]=$(( ${blocks[ 16 * $rotated + i ]} ))
+	done
+	print_up
 }
 
+# Stuffs to do when down key is hit
 function do_on_key_down {
-	true
+	calculate_distance
+	print_down $dist
 }
 
+# Stuffs to do when left key is hit
 function do_on_key_left {
-	true
+	local i=0
+	local j=0
+
+	for (( i = 0; i < 4; ++i )); do
+		for (( j = 0; j < 4; ++j )); do
+			if (( ${current[ 4 * j + i ]} == 1 )); then
+				if (( $col + i - 1 < 0 )); then
+					break
+				fi
+				if (( ${map[ $cols * ($row + j) + $col + i - 1 ]} != 0 )); then
+					break
+				fi
+			fi
+		done
+		if (( j != 4 )); then
+			break
+		fi
+	done
+	if (( i == 4 )); then
+		(( --col ))
+		print_horizontal 0
+	fi
 }
 
+# Stuffs to do when right key is hit
 function do_on_key_right {
-	true
+	local i=0
+	local j=0
+
+	for (( i = 0; i < 4; ++i )); do
+		for (( j = 0; j < 4; ++j )); do
+			if (( ${current[ 4 * j + 3 - i ]} == 1 )); then
+				if (( $col + 4 - i >= $cols )); then
+					break
+				fi
+				if (( ${map[ $cols * ($row + j) + $col + 4 - i ]} != 0 )); then
+					break
+				fi
+			fi
+		done
+		if (( j != 4 )); then
+			break
+		fi
+	done
+	if (( i == 4 )); then
+		(( ++col ))
+		print_horizontal 1
+	fi
 }
 
-function do_keyboard_operation {
-	read -s -n 1 -t 0.2
+# Check if keyboard is hit and respond to specified keys
+function check_keyboard_hit {
+	read -s -n 1 -t 0.3
 	case $REPLY in
 		$esc )
 			read -s -n 2 -t 0.001
@@ -270,7 +447,11 @@ function do_keyboard_operation {
 
 # Calculate the distance between current block and surface
 function calculate_distance {
-	distance=$row_count
+	local i=0
+	local j=0
+	local k=0
+
+	dist=$rows
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
 			if (( ${current[ 12 - 4 * j + i ]} == 1 )); then
@@ -280,15 +461,13 @@ function calculate_distance {
 		if (( j == 4 )); then
 			continue
 		fi
-		for (( k = $coord_row + 4 - j; k < $row_count; ++k )); do
-			if (( ${map[ 4 * k + coord_column + i ]} == 1 )); then
+		for (( k = $row + 4 - j; k < $rows; ++k )); do
+			if (( ${map[ 4 * k + col + i ]} != 0 )); then
 				break
 			fi
 		done
-		distance=$(( k + j - $coord_row - 4 < $distance ? k + j - $coord_row - 4 : $distance ))
+		dist=$(( k + j - $row - 4 < $dist ? k + j - $row - 4 : $dist ))
 	done
-
-	return $distance
 }
 
 # Generate a new block with random shape and color
@@ -310,38 +489,41 @@ function generate_new_block {
 
 # Init the game
 function init {
+	local i=0
+	local j=0
+
 	init_environment
 
 	move_to_coordinate 1 1
 	print_background_char "+"
-	for (( i = 0; i < $column_count; ++i )); do
+	for (( i = 0; i < $cols; ++i )); do
 		print_background_char "--"
 	done
 	print_background_char "+\n"
-	for (( i = 0; i < $row_count; ++i )); do
+	for (( i = 0; i < $rows; ++i )); do
 		print_background_char "|"
-		for (( j = 0; j < $column_count; ++j )); do
+		for (( j = 0; j < $cols; ++j )); do
 			print_background_square
 		done
 		print_background_char "|\n"
 	done
 	print_background_char "+"
-	for (( i = 0; i < $column_count; ++i )); do
+	for (( i = 0; i < $cols; ++i )); do
 		print_background_char "--"
 	done
 	print_background_char "+\n"
 
-	move_to_coordinate 1 $(( $column_count * 2 + 3 ))
+	move_to_coordinate 1 $(( $cols * 2 + 3 ))
 	print_background_char "+--------+"
 	for (( i = 0; i < 4; ++i )); do
-		move_to_coordinate $(( 2 + i )) $(( $column_count * 2 + 3 ))
+		move_to_coordinate $(( 2 + i )) $(( $cols * 2 + 3 ))
 		print_background_char "|"
 		for (( j = 0; j < 4; ++j )); do
 			print_background_square
 		done
 		print_background_char "|"
 	done
-	move_to_coordinate 6 $(( $column_count * 2 + 3 ))
+	move_to_coordinate 6 $(( $cols * 2 + 3 ))
 	print_background_char "+--------+"
 }
 
@@ -351,19 +533,18 @@ function main {
 
 	generate_new_block current_num current_color current
 	generate_new_block next_num next_color next
-	print_block $coord_row $coord_column $current_color current
+	print_block $row $col $current_color current
 	print_next_block
 
 	while true; do
 		while true; do
 			start=`date +%s%N`
 			while (( `date +%s%N` - $start < 1000000000 - $speed * 50000000 )); do
-				do_keyboard_operation
+				check_keyboard_hit
 			done
-			distance=`calculate_distance`
-			if (( $distance > 0 )); then
-				(( ++coord_row ))
-				# print fall
+			calculate_distance
+			if (( $dist > 0 )); then
+				print_down 1
 			else
 				break
 			fi
