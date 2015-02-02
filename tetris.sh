@@ -23,7 +23,7 @@
 # Width and height
 rows=20
 cols=10
-if (( `tput lines` < $rows || `tput cols` < $cols * 2 + 12 )); then
+if (( `tput lines` < $rows + 2 || `tput cols` < $cols * 2 + 12 )); then
 	echo "$0: the size of this terminal is too small to run this game"
 	exit 1
 fi
@@ -525,6 +525,7 @@ function write_to_map {
 	done
 }
 
+# Remove full lines
 function decrease_lines {
 	local i=0
 	local j=0
@@ -578,6 +579,7 @@ function judge_game_over {
 	fi
 }
 
+# Replace current block with next block, then generate a new next block
 function replace_current_with_next {
 	current_num=$next_num
 	current_color=$next_color
