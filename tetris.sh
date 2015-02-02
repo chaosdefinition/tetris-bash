@@ -23,7 +23,7 @@
 # Width and height
 rows=20
 cols=10
-if [[ `tput lines` -lt $rows || `tput cols` -lt $(( $cols * 2 + 12 )) ]]; then
+if (( `tput lines` < $rows || `tput cols` < $cols * 2 + 12 )); then
 	echo "$0: the size of this terminal is too small to run this game"
 	exit 1
 fi
@@ -99,8 +99,10 @@ next_num=0
 next_color=0
 
 # Initial coordinate of block in map
-row=0
-col=$(( ($cols - 4) / 2 ))
+init_row=0
+init_col=$(( ($cols - 4) / 2 ))
+row=$init_row
+col=$init_col
 
 # Initial speed
 speed=0
@@ -137,6 +139,7 @@ function restore_environment {
 
 # Init game environment
 function init_environment {
+	stty -echo
 	save_screen
 	setterm -cursor off
 	trap "restore_environment 'Game interrupted.'" SIGINT SIGQUIT
@@ -188,12 +191,16 @@ function print_background_char {
 function print_block {
 	local i=0
 	local j=0
+
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
 			move_to $(( $1 + i )) $(( $2 + j ))
 			if (( $4[ 4 * i + j ] == 1 )); then
 				print_square $3
 			else
+				if (( ${map[ $cols * ($1 + i) + $2 + j ]} != 0 )); then
+					print_square $(( ${map[ $cols * ($1 + i) + $2 + j ]} ))
+				fi
 				print_background_square
 			fi
 		done
@@ -202,15 +209,29 @@ function print_block {
 
 # Print the next block
 function print_next_block {
-	print_block 0 $(( $cols + 1 )) $next_color next
+	local i=0
+	local j=0
+
+	for (( i = 0; i < 4; ++i )); do
+		for (( j = 0; j < 4; ++j )); do
+			move_to_coordinate $(( i + 2 )) $(( 2 * $cols + 2 * j + 4 ))
+			if (( ${next[ 4 * i + j ]} == 1 )); then
+				print_square $next_color
+			else
+				print_background_square
+			fi
+		done
+	done
 }
 
 # Print the whole map
 function print_map {
 	local i=0
 	local j=0
+
 	for (( i = 0; i < $rows; ++i )); do
 		for (( j = 0; j < $cols; ++j )); do
+			move_to $i $j
 			if (( ${map[ $cols * i + j ]} == 0 )); then
 				print_background_square
 			else
@@ -221,9 +242,10 @@ function print_map {
 }
 
 # Printing method invoked after block rotates
-function print_up {
+function print_up_move {
 	local i=0
 	local j=0
+
 	for (( i = 0; i < 4; ++i )); do
 		if (( $row + i >= $rows )); then
 			continue
@@ -246,12 +268,13 @@ function print_up {
 	done
 }
 
-# Printing method invoked after block falls down to surface
+# Printing method invoked after block moves down
 #
 # $1: distance to fall
-function print_down {
+function print_down_move {
 	local i=0
 	local j=0
+
 	for (( i = 0; i < 4; ++i )); do
 		if (( $row + i >= $rows )); then
 			continue
@@ -293,7 +316,7 @@ function print_down {
 # Printing method invoked after block moves 1 square horizontally
 #
 # $1: 0 if move to right, 1 if move to right
-function print_horizontal {
+function print_horizontal_move {
 	local i=0
 	local j=0
 
@@ -317,7 +340,10 @@ function print_horizontal {
 			fi
 		done
 		j=$(( $1 == 0 ? $col + 4 : $col - 1 ))
-		if (( $j >= 0 && $j < $cols && ${map[ $cols * ($row + i) + $j ]} == 0 )); then
+		if (( $j < 0 || $j >= $cols )); then
+			continue
+		fi
+		if (( ${map[ $cols * ($row + i) + $j ]} == 0 )); then
 			move_to $(( $row + i )) $j
 			print_background_square
 		fi
@@ -349,13 +375,13 @@ function do_on_key_up {
 	for (( i = 0; i < 16; ++i )); do
 		current[ $i ]=$(( ${blocks[ 16 * $rotated + i ]} ))
 	done
-	print_up
+	print_up_move
 }
 
 # Stuffs to do when down key is hit
 function do_on_key_down {
-	calculate_distance
-	print_down $dist
+	local dist=`calculate_distance`
+	print_down_move $dist
 }
 
 # Stuffs to do when left key is hit
@@ -380,7 +406,7 @@ function do_on_key_left {
 	done
 	if (( i == 4 )); then
 		(( --col ))
-		print_horizontal 0
+		print_horizontal_move 0
 	fi
 }
 
@@ -406,7 +432,7 @@ function do_on_key_right {
 	done
 	if (( i == 4 )); then
 		(( ++col ))
-		print_horizontal 1
+		print_horizontal_move 1
 	fi
 }
 
@@ -446,12 +472,14 @@ function check_keyboard_hit {
 ############################# Game logics ######################################
 
 # Calculate the distance between current block and surface
+#
+# return: $dist
 function calculate_distance {
 	local i=0
 	local j=0
 	local k=0
 
-	dist=$rows
+	local dist=$rows
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
 			if (( ${current[ 12 - 4 * j + i ]} == 1 )); then
@@ -462,12 +490,14 @@ function calculate_distance {
 			continue
 		fi
 		for (( k = $row + 4 - j; k < $rows; ++k )); do
-			if (( ${map[ 4 * k + col + i ]} != 0 )); then
+			if (( ${map[ $cols * k + $col + i ]} != 0 )); then
 				break
 			fi
 		done
 		dist=$(( k + j - $row - 4 < $dist ? k + j - $row - 4 : $dist ))
 	done
+
+	echo $dist
 }
 
 # Generate a new block with random shape and color
@@ -478,11 +508,83 @@ function calculate_distance {
 function generate_new_block {
 	let "$1=$(( $RANDOM % 28 ))"
 	let "$2=$(( $RANDOM % 7 + 1 ))"
+	for (( i = 0; i < 16; ++i )); do
+		let "$3[ $i ]=${blocks[ $(( 16 * $1 + i )) ]}"
+	done
+}
+
+# Write current block to map
+function write_to_map {
+	local i=0
+	local j=0
+
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			let "$3[ $(( 4 * i + j )) ]=${blocks[ $(( 16 * $1 + 4 * i + j )) ]}"
+			(( map[ $cols * ($row + i) + $col + j ] += ${current[ 4 * i + j ]} * $current_color ))
 		done
 	done
+}
+
+function decrease_lines {
+	local i=0
+	local j=0
+	local k=0
+	local l=0
+
+	for (( i = $rows - 1; i >= 0; )); do
+		for (( j = 0; j < $cols; ++j )); do
+			if (( ${map[ $cols * i + j ]} == 0 )); then
+				break
+			fi
+		done
+		if (( j == $cols )); then
+			for (( k = i; k > 0; --k )); do
+				for (( l = 0; l < $cols; ++l )); do
+					(( map[ $cols * k + l ] = ${map[ $cols * (k - 1) + l ]} ))
+				done
+			done
+			for (( k = 0; k < $cols; ++k )); do
+				(( map[ k ] = 0 ))
+			done
+		else
+			(( --i ))
+		fi
+	done
+}
+
+# Judge if game is over
+#
+# return: 1 if game is over, otherwise 0
+function judge_game_over {
+	local i=0
+	local j=0
+
+	for (( i = 0; i < 4; ++i )); do
+		for (( j = 0; j < 4; ++j )); do
+			if (( ${current[ 4 * i + j ]} == 1 )); then
+				if (( ${map[ $cols * ($init_row + i) + $init_col + j ]} != 0 )); then
+					break
+				fi
+			fi
+		done
+		if (( j < 4 )); then
+			break
+		fi
+	done
+	if (( i < 4 )); then
+		echo 1
+	else
+		echo 0
+	fi
+}
+
+function replace_current_with_next {
+	current_num=$next_num
+	current_color=$next_color
+	for (( i = 0; i < 16; ++i )); do
+		(( current[ i ] = ${next[ i ]} ))
+	done
+	generate_new_block next_num next_color next
 }
 
 ############################# Init and main ####################################
@@ -542,17 +644,25 @@ function main {
 			while (( `date +%s%N` - $start < 1000000000 - $speed * 50000000 )); do
 				check_keyboard_hit
 			done
-			calculate_distance
+			local dist=`calculate_distance`
 			if (( $dist > 0 )); then
-				print_down 1
+				print_down_move 1
 			else
 				break
 			fi
 		done
-		# write to map
-		# decrease lines
-		# if game is over, break
-		# else generate new block
+		write_to_map
+		decrease_lines
+		print_map
+		if (( `judge_game_over` )); then
+			break
+		else
+			replace_current_with_next
+			row=$init_row
+			col=$init_col
+			print_block $row $col $current_color current
+			print_next_block
+		fi
 	done
 
 	restore_environment "Game over!!!"
