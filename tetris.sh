@@ -20,99 +20,105 @@
 
 ############################# Data area ########################################
 
-# Width and height
-rows=20
-cols=10
-if (( `tput lines` < $rows + 2 || `tput cols` < $cols * 2 + 12 )); then
-	echo "$0: the size of this terminal is too small to run this game"
-	exit 1
-fi
+# Init game data
+function init_data {
+	local i=0
+	local j=0
 
-# Initialize game map
-for (( i = 0; i < $rows; ++i )); do
-	for (( j = 0; j < $cols; ++j )); do
-		map[ $(( $cols * i + j )) ]=0
+	# Width and height
+	rows=20
+	cols=10
+	if (( `tput lines` < $rows + 2 || `tput cols` < $cols * 2 + 12 )); then
+		echo "$0: the size of this terminal is too small to run this game"
+		exit 1
+	fi
+
+	# Initialize game map
+	for (( i = 0; i < $rows; ++i )); do
+		for (( j = 0; j < $cols; ++j )); do
+			map[ $(( $cols * i + j )) ]=0
+		done
 	done
-done
 
-# Pattern array of all blocks
-blocks=(
-	# S
-	0 1 0 0 0 1 1 0 0 0 1 0 0 0 0 0
-	0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0
-	0 1 0 0 0 1 1 0 0 0 1 0 0 0 0 0
-	0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0
+	# Pattern array of all blocks
+	blocks=(
+		# S
+		0 1 0 0 0 1 1 0 0 0 1 0 0 0 0 0
+		0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0
+		0 1 0 0 0 1 1 0 0 0 1 0 0 0 0 0
+		0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0
 
-	# Z
-	0 0 1 0 0 1 1 0 0 1 0 0 0 0 0 0
-	0 1 1 0 0 0 1 1 0 0 0 0 0 0 0 0
-	0 0 1 0 0 1 1 0 0 1 0 0 0 0 0 0
-	0 1 1 0 0 0 1 1 0 0 0 0 0 0 0 0
+		# Z
+		0 0 1 0 0 1 1 0 0 1 0 0 0 0 0 0
+		0 1 1 0 0 0 1 1 0 0 0 0 0 0 0 0
+		0 0 1 0 0 1 1 0 0 1 0 0 0 0 0 0
+		0 1 1 0 0 0 1 1 0 0 0 0 0 0 0 0
 
-	# L
-	0 1 0 0 0 1 0 0 0 1 1 0 0 0 0 0
-	0 0 1 0 1 1 1 0 0 0 0 0 0 0 0 0
-	1 1 0 0 0 1 0 0 0 1 0 0 0 0 0 0
-	0 0 0 0 1 1 1 0 1 0 0 0 0 0 0 0
+		# L
+		0 1 0 0 0 1 0 0 0 1 1 0 0 0 0 0
+		0 0 1 0 1 1 1 0 0 0 0 0 0 0 0 0
+		1 1 0 0 0 1 0 0 0 1 0 0 0 0 0 0
+		0 0 0 0 1 1 1 0 1 0 0 0 0 0 0 0
 
-	# J
-	0 0 1 0 0 0 1 0 0 1 1 0 0 0 0 0
-	0 1 1 1 0 0 0 1 0 0 0 0 0 0 0 0
-	0 0 1 1 0 0 1 0 0 0 1 0 0 0 0 0
-	0 0 0 0 0 1 0 0 0 1 1 1 0 0 0 0
+		# J
+		0 0 1 0 0 0 1 0 0 1 1 0 0 0 0 0
+		0 1 1 1 0 0 0 1 0 0 0 0 0 0 0 0
+		0 0 1 1 0 0 1 0 0 0 1 0 0 0 0 0
+		0 0 0 0 0 1 0 0 0 1 1 1 0 0 0 0
 
-	# I
-	0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
-	0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0
-	0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
-	0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0
+		# I
+		0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
+		0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0
+		0 0 0 0 1 1 1 1 0 0 0 0 0 0 0 0
+		0 1 0 0 0 1 0 0 0 1 0 0 0 1 0 0
 
-	# O
-	0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
-	0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
-	0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
-	0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
+		# O
+		0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
+		0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
+		0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
+		0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 0
 
-	# T
-	0 0 0 0 1 1 1 0 0 1 0 0 0 0 0 0
-	0 1 0 0 0 1 1 0 0 1 0 0 0 0 0 0
-	0 1 0 0 1 1 1 0 0 0 0 0 0 0 0 0
-	0 1 0 0 1 1 0 0 0 1 0 0 0 0 0 0
-)
+		# T
+		0 0 0 0 1 1 1 0 0 1 0 0 0 0 0 0
+		0 1 0 0 0 1 1 0 0 1 0 0 0 0 0 0
+		0 1 0 0 1 1 1 0 0 0 0 0 0 0 0 0
+		0 1 0 0 1 1 0 0 0 1 0 0 0 0 0 0
+	)
 
-# Current block and next block information
-current=(
-	0 0 0 0
-	0 0 0 0
-	0 0 0 0
-	0 0 0 0
-)
-current_num=0
-current_color=0
-next=(
-	0 0 0 0
-	0 0 0 0
-	0 0 0 0
-	0 0 0 0
-)
-next_num=0
-next_color=0
+	# Current block and next block information
+	current=(
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	)
+	current_num=0
+	current_color=0
+	next=(
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+		0 0 0 0
+	)
+	next_num=0
+	next_color=0
 
-# Initial coordinate of block in map
-init_row=0
-init_col=$(( ($cols - 4) / 2 ))
-row=$init_row
-col=$init_col
+	# Initial coordinate of block in map
+	init_row=0
+	init_col=$(( ($cols - 4) / 2 ))
+	row=$init_row
+	col=$init_col
 
-# Initial speed
-speed=0
+	# Initial speed
+	speed=0
 
-# Keyboard control strings
-esc=`echo -en "\e"`
-up=`echo -en "[A"`
-down=`echo -en "[B"`
-left=`echo -en "[D"`
-right=`echo -en "[C"`
+	# Keyboard control strings
+	esc=`echo -en "\e"`
+	up=`echo -en "[A"`
+	down=`echo -en "[B"`
+	left=`echo -en "[D"`
+	right=`echo -en "[C"`
+}
 
 ############################# Shell operations #################################
 
@@ -530,7 +536,6 @@ function decrease_lines {
 	local i=0
 	local j=0
 	local k=0
-	local l=0
 
 	for (( i = $rows - 1; i >= 0; )); do
 		for (( j = 0; j < $cols; ++j )); do
@@ -539,13 +544,13 @@ function decrease_lines {
 			fi
 		done
 		if (( j == $cols )); then
-			for (( k = i; k > 0; --k )); do
-				for (( l = 0; l < $cols; ++l )); do
-					(( map[ $cols * k + l ] = ${map[ $cols * (k - 1) + l ]} ))
+			for (( j = i; j > 0; --j )); do
+				for (( k = 0; k < $cols; ++k )); do
+					(( map[ $cols * j + k ] = ${map[ $cols * (j - 1) + k ]} ))
 				done
 			done
-			for (( k = 0; k < $cols; ++k )); do
-				(( map[ k ] = 0 ))
+			for (( j = 0; j < $cols; ++j )); do
+				(( map[ j ] = 0 ))
 			done
 		else
 			(( --i ))
@@ -581,6 +586,8 @@ function judge_game_over {
 
 # Replace current block with next block, then generate a new next block
 function replace_current_with_next {
+	local i=0
+
 	current_num=$next_num
 	current_color=$next_color
 	for (( i = 0; i < 16; ++i )); do
@@ -597,6 +604,7 @@ function init {
 	local j=0
 
 	init_environment
+	init_data
 
 	move_to_coordinate 1 1
 	print_background_char "+"
