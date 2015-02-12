@@ -206,8 +206,9 @@ function print_block {
 			else
 				if (( ${map[ $cols * ($1 + i) + $2 + j ]} != 0 )); then
 					print_square $(( ${map[ $cols * ($1 + i) + $2 + j ]} ))
+				else
+					print_background_square
 				fi
-				print_background_square
 			fi
 		done
 	done
@@ -567,7 +568,7 @@ function judge_game_over {
 
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			if (( ${current[ 4 * i + j ]} == 1 )); then
+			if (( ${next[ 4 * i + j ]} == 1 )); then
 				if (( ${map[ $cols * ($init_row + i) + $init_col + j ]} != 0 )); then
 					break
 				fi
