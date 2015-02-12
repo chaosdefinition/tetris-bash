@@ -171,14 +171,14 @@ function move_to {
 
 # Print a square using specified color
 #
-# $1: color ranging from 1 to 7
+# $1: color ranging from 0 to 7
 function print_square {
 	echo -en "\e[0;$(( $1 + 30 ));$(( $1 + 40 ))m  \e[m"
 }
 
 # Print a square using background color
 function print_background_square {
-	echo -en "\e[0;30;40m  \e[m"
+	print_square 0
 }
 
 # Print a string using background color
