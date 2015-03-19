@@ -151,6 +151,7 @@ function init_environment {
 	save_screen
 	setterm -cursor off
 	trap "restore_environment 'Game interrupted.'" SIGINT SIGQUIT
+	trap "" SIGALRM
 }
 
 # Move cursor to (row, col)
@@ -596,7 +597,6 @@ function replace_current_with_next {
 	for (( i = 0; i < 16; ++i )); do
 		(( current[ i ] = ${next[ i ]} ))
 	done
-	generate_new_block next_num next_color next
 }
 
 ############################# Init and main ####################################
@@ -671,6 +671,7 @@ function main {
 			break
 		else
 			replace_current_with_next
+			generate_new_block next_num next_color next
 			row=$init_row
 			col=$init_col
 			print_block $row $col $current_color current
