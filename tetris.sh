@@ -125,10 +125,12 @@ function init_data {
 # Save terminal screen
 function save_screen {
 	echo -en "\e[?47h"
+	clear
 }
 
 # Reload terminal screen
 function restore_screen {
+	clear
 	echo -en "\e[?47l"
 }
 
