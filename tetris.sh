@@ -109,8 +109,8 @@ function init_data {
 	row=$init_row
 	col=$init_col
 
-	# Initial speed
-	speed=0
+	# Initial speed (ranging from 0 to 10)
+	speed=2
 
 	# Keyboard control strings
 	esc=`echo -en "\e"`
@@ -390,8 +390,8 @@ function do_on_key_up {
 
 # Stuffs to do when down key is hit
 function do_on_key_down {
-	local dist=`calculate_distance`
-	print_down_move $dist
+	calculate_distance
+	print_down_move $?
 }
 
 # Stuffs to do when left key is hit
@@ -447,6 +447,8 @@ function do_on_key_right {
 }
 
 # Check if keyboard is hit and respond to specified keys
+#
+# return: 1, 2, 3, 4 or 0 each corresponding to up, down, left, right or others
 function check_keyboard_hit {
 	read -s -n 1 -t 0.3
 	case $REPLY in
@@ -455,26 +457,32 @@ function check_keyboard_hit {
 			case $REPLY in
 				$up )
 					do_on_key_up
+					return 1
 					;;
 
 				$down )
 					do_on_key_down
+					return 2
 					;;
 
 				$left )
 					do_on_key_left
+					return 3
 					;;
 
 				$right )
 					do_on_key_right
+					return 4
 					;;
 
 				* )
+					return 0
 					;;
 			esac
 			;;
 
 		* )
+			return 0
 			;;
 	esac
 }
@@ -507,7 +515,7 @@ function calculate_distance {
 		dist=$(( k + j - $row - 4 < $dist ? k + j - $row - 4 : $dist ))
 	done
 
-	echo $dist
+	return $dist
 }
 
 # Generate a new block with random shape and color
@@ -582,9 +590,9 @@ function judge_game_over {
 		fi
 	done
 	if (( i < 4 )); then
-		echo 1
+		return 1
 	else
-		echo 0
+		return 0
 	fi
 }
 
@@ -653,21 +661,36 @@ function main {
 
 	while true; do
 		while true; do
-			start=`date +%s%N`
-			while (( `date +%s%N` - $start < 1000000000 - $speed * 50000000 )); do
+			local start=`date +%s%N`
+			local interval=$(( 1000 - $speed * 100 )) # In milliseconds
+
+			while (( `date +%s%N` - $start < $interval * 1000000 )); do
 				check_keyboard_hit
+
+				# If player hit down, give him 500ms to move around
+				if (( $? == 2 )); then
+					start=`date +%s%N`
+					while (( `date +%s%N` - $start < 500 * 1000000 )); do
+						check_keyboard_hit
+					done
+					break
+				fi
 			done
-			local dist=`calculate_distance`
-			if (( $dist > 0 )); then
+
+			calculate_distance
+			if (( $? > 0 )); then
 				print_down_move 1
 			else
 				break
 			fi
 		done
+
 		write_to_map
 		decrease_lines
 		print_map
-		if (( `judge_game_over` )); then
+
+		judge_game_over
+		if (( $? )); then
 			break
 		else
 			replace_current_with_next
