@@ -61,8 +61,8 @@ function move_to_coordinate {
 
 # Move cursor to map(row, col)
 #
-# $1: row number ranging from 0 to $(( $rows - 1 ))
-# $2: column number ranging from 0 to $(( $cols - 1 ))
+# $1: row number ranging from 0 to $(( rows - 1 ))
+# $2: column number ranging from 0 to $(( cols - 1 ))
 function move_to {
 	move_to_coordinate $(( $1 + 2 )) $(( $2 * 2 + 2 ))
 }
@@ -195,8 +195,8 @@ function print_background_char {
 
 # Print a block
 #
-# $1: row number ranging from 0 to $(( $rows - 1 ))
-# $2: column number ranging from 0 to $(( $cols - 1 ))
+# $1: row number ranging from 0 to $(( rows - 1 ))
+# $2: column number ranging from 0 to $(( cols - 1 ))
 # $3: color
 # $4: pattern array
 function print_block {
@@ -370,7 +370,7 @@ function do_on_key_up {
 	local j=0
 
 	local rotated=$(( current_num % 4 < 3 ? current_num + 1 : current_num - 3 ))
-	local offset=0
+	local offset=0 # Indicates number of squares to adjust horizontally
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
 			if (( blocks[ 16 * rotated + 4 * i + j ] == 1 )); then
@@ -382,8 +382,7 @@ function do_on_key_up {
 				if (( col + j < 0 )); then
 					tmp=$(( col + j ))
 					offset=$(( tmp < offset ? tmp : offset ))
-				fi
-				if (( col + j >= cols )); then
+				elif (( col + j >= cols )); then
 					tmp=$(( col + j - cols + 1 ))
 					offset=$(( tmp > offset ? tmp : offset ))
 				fi
@@ -402,9 +401,9 @@ function do_on_key_up {
 
 	current_num=$rotated
 	for (( i = 0; i < 16; ++i )); do
-		current[ $i ]=$(( blocks[ 16 * rotated + i ] ))
+		(( current[ i ] = blocks[ 16 * rotated + i ] ))
 	done
-	col=$(( col - offset ))
+	(( col -= offset ))
 	print_up_move
 }
 
@@ -616,7 +615,7 @@ function judge_game_over {
 	fi
 }
 
-# Replace current block with next block, then generate a new next block
+# Replace current block with next block
 function replace_current_with_next {
 	local i=0
 
