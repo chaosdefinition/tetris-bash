@@ -16,7 +16,56 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+############################# Shell operations #################################
 
+# Save terminal screen
+function save_screen {
+	echo -en "\e[?47h"
+	clear
+}
+
+# Reload terminal screen
+function restore_screen {
+	clear
+	echo -en "\e[?47l"
+}
+
+# Restore previous environment and exit
+#
+# $1: message to show before exit
+# $2: exit status
+function restore_environment {
+	restore_screen
+	stty sane
+	setterm -cursor on
+	echo $1
+	exit $2
+}
+
+# Init game environment
+function init_environment {
+	stty -echo
+	save_screen
+	setterm -cursor off
+	trap "restore_environment 'Game interrupted.' 0" SIGINT SIGQUIT
+	trap "" SIGALRM
+}
+
+# Move cursor to (row, col)
+#
+# $1: row number ranging from 1 to `tputs lines`
+# $2: column number ranging from 1 to `tputs cols`
+function move_to_coordinate {
+	echo -en "\e[$1;$2f"
+}
+
+# Move cursor to map(row, col)
+#
+# $1: row number ranging from 0 to $(( $rows - 1 ))
+# $2: column number ranging from 0 to $(( $cols - 1 ))
+function move_to {
+	move_to_coordinate $(( $1 + 2 )) $(( $2 * 2 + 2 ))
+}
 
 ############################# Data area ########################################
 
@@ -28,15 +77,18 @@ function init_data {
 	# Width and height
 	rows=20
 	cols=10
-	if (( `tput lines` < $rows + 2 || `tput cols` < $cols * 2 + 12 )); then
-		echo "$0: the size of this terminal is too small to run this game"
-		exit 1
+	if (( rows < 4 || cols < 4 )); then
+		restore_environment "$0: the size of the game map is too small" 1
+	fi
+	if (( `tput lines` < rows + 2 || `tput cols` < cols * 2 + 12 )); then
+		restore_environment "$0: the size of this terminal is too small\
+			 to run this game" 1
 	fi
 
 	# Initialize game map
-	for (( i = 0; i < $rows; ++i )); do
-		for (( j = 0; j < $cols; ++j )); do
-			map[ $(( $cols * i + j )) ]=0
+	for (( i = 0; i < rows; ++i )); do
+		for (( j = 0; j < cols; ++j )); do
+			map[ $(( cols * i + j )) ]=0
 		done
 	done
 
@@ -105,12 +157,12 @@ function init_data {
 
 	# Initial coordinate of block in map
 	init_row=0
-	init_col=$(( ($cols - 4) / 2 ))
+	init_col=$(( (cols - 4) / 2 ))
 	row=$init_row
 	col=$init_col
 
 	# Initial speed (ranging from 0 to 10)
-	speed=2
+	speed=0
 
 	# Keyboard control strings
 	esc=`echo -en "\e"`
@@ -118,56 +170,6 @@ function init_data {
 	down=`echo -en "[B"`
 	left=`echo -en "[D"`
 	right=`echo -en "[C"`
-}
-
-############################# Shell operations #################################
-
-# Save terminal screen
-function save_screen {
-	echo -en "\e[?47h"
-	clear
-}
-
-# Reload terminal screen
-function restore_screen {
-	clear
-	echo -en "\e[?47l"
-}
-
-# Restore previous environment and exit
-#
-# $1: message to show before exit
-function restore_environment {
-	restore_screen
-	stty sane
-	setterm -cursor on
-	echo $1
-	exit 0
-}
-
-# Init game environment
-function init_environment {
-	stty -echo
-	save_screen
-	setterm -cursor off
-	trap "restore_environment 'Game interrupted.'" SIGINT SIGQUIT
-	trap "" SIGALRM
-}
-
-# Move cursor to (row, col)
-#
-# $1: row number ranging from 1 to `tputs lines`
-# $2: column number ranging from 1 to `tputs cols`
-function move_to_coordinate {
-	echo -en "\e[$1;$2f"
-}
-
-# Move cursor to map(row, col)
-#
-# $1: row number ranging from 0 to $(( $rows - 1 ))
-# $2: column number ranging from 0 to $(( $cols - 1 ))
-function move_to {
-	move_to_coordinate $(( $1 + 2 )) $(( $2 * 2 + 2 ))
 }
 
 ############################# Printing methods #################################
@@ -207,8 +209,8 @@ function print_block {
 			if (( $4[ 4 * i + j ] == 1 )); then
 				print_square $3
 			else
-				if (( ${map[ $cols * ($1 + i) + $2 + j ]} != 0 )); then
-					print_square $(( ${map[ $cols * ($1 + i) + $2 + j ]} ))
+				if (( map[ cols * ($1 + i) + $2 + j ] != 0 )); then
+					print_square $(( map[ cols * ($1 + i) + $2 + j ] ))
 				else
 					print_background_square
 				fi
@@ -224,8 +226,8 @@ function print_next_block {
 
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			move_to_coordinate $(( i + 2 )) $(( 2 * $cols + 2 * j + 4 ))
-			if (( ${next[ 4 * i + j ]} == 1 )); then
+			move_to_coordinate $(( i + 2 )) $(( 2 * cols + 2 * j + 4 ))
+			if (( next[ 4 * i + j ] == 1 )); then
 				print_square $next_color
 			else
 				print_background_square
@@ -239,13 +241,13 @@ function print_map {
 	local i=0
 	local j=0
 
-	for (( i = 0; i < $rows; ++i )); do
-		for (( j = 0; j < $cols; ++j )); do
+	for (( i = 0; i < rows; ++i )); do
+		for (( j = 0; j < cols; ++j )); do
 			move_to $i $j
-			if (( ${map[ $cols * i + j ]} == 0 )); then
+			if (( map[ cols * i + j ] == 0 )); then
 				print_background_square
 			else
-				print_square $(( ${map[ $cols * i + j ]} ))
+				print_square $(( map[ cols * i + j ] ))
 			fi
 		done
 	done
@@ -257,19 +259,19 @@ function print_up_move {
 	local j=0
 
 	for (( i = 0; i < 4; ++i )); do
-		if (( $row + i >= $rows )); then
+		if (( row + i >= rows )); then
 			continue
 		fi
 		for (( j = 0; j < 4; ++j )); do
-			if (( $col + j < 0 || $col + j >= $cols )); then
+			if (( col + j < 0 || col + j >= cols )); then
 				continue
 			fi
-			move_to $(( $row + i )) $(( $col + j ))
-			if (( ${current[ 4 * i + j ]} != 0 )); then
+			move_to $(( row + i )) $(( col + j ))
+			if (( current[ 4 * i + j ] != 0 )); then
 				print_square $current_color
 			else
-				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
-					print_square $(( ${map[ $cols * ($row + i) + $col + j ]} ))
+				if (( map[ cols * (row + i) + col + j ] != 0 )); then
+					print_square $(( map[ cols * (row + i) + col + j ] ))
 				else
 					print_background_square
 				fi
@@ -286,15 +288,15 @@ function print_down_move {
 	local j=0
 
 	for (( i = 0; i < 4; ++i )); do
-		if (( $row + i >= $rows )); then
+		if (( row + i >= rows )); then
 			continue
 		fi
 		for (( j = 0; j < 4; ++j )); do
-			if (( $col + j < 0 || $col + j >= $cols )); then
+			if (( col + j < 0 || col + j >= cols )); then
 				continue
 			fi
-			if (( ${map[ $cols * ($row + i) + $col + j ]} == 0 )); then
-				move_to $(( $row + i )) $(( $col + j ))
+			if (( map[ cols * (row + i) + col + j ] == 0 )); then
+				move_to $(( row + i )) $(( col + j ))
 				print_background_square
 			fi
 		done
@@ -302,19 +304,19 @@ function print_down_move {
 
 	(( row += $1 ))
 	for (( i = 0; i < 4; ++i )); do
-		if (( $row + i >= $rows )); then
+		if (( row + i >= rows )); then
 			continue
 		fi
 		for (( j = 0; j < 4; ++j )); do
-			if (( $col + j < 0 || $col + j >= $cols )); then
+			if (( col + j < 0 || col + j >= cols )); then
 				continue
 			fi
-			move_to $(( $row + i )) $(( $col + j ))
-			if (( ${current[ 4 * i + j ]} != 0 )); then
+			move_to $(( row + i )) $(( col + j ))
+			if (( current[ 4 * i + j ] != 0 )); then
 				print_square $current_color
 			else
-				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
-					print_square $(( ${map[ $cols * ($row + i) + $col + j ]} ))
+				if (( map[ cols * (row + i) + col + j ] != 0 )); then
+					print_square $(( map[ cols * (row + i) + col + j ] ))
 				else
 					print_background_square
 				fi
@@ -331,30 +333,30 @@ function print_horizontal_move {
 	local j=0
 
 	for (( i = 0; i < 4; ++i )); do
-		if (( $row + i >= $rows )); then
+		if (( row + i >= rows )); then
 			continue
 		fi
 		for (( j = 0; j < 4; ++j )); do
-			if (( $col + j < 0 || $col + j >= $cols )); then
+			if (( col + j < 0 || col + j >= cols )); then
 				continue
 			fi
-			move_to $(( $row + i )) $(( $col + j ))
-			if (( ${current[ 4 * i + j ]} != 0 )); then
+			move_to $(( row + i )) $(( col + j ))
+			if (( current[ 4 * i + j ] != 0 )); then
 				print_square $current_color
 			else
-				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
-					print_square $(( ${map[ $cols * ($row + i) + $col + j ]} ))
+				if (( map[ cols * (row + i) + col + j ] != 0 )); then
+					print_square $(( map[ cols * (row + i) + col + j ] ))
 				else
 					print_background_square
 				fi
 			fi
 		done
-		j=$(( $1 == 0 ? $col + 4 : $col - 1 ))
-		if (( $j < 0 || $j >= $cols )); then
+		j=$(( $1 == 0 ? col + 4 : col - 1 ))
+		if (( j < 0 || j >= cols )); then
 			continue
 		fi
-		if (( ${map[ $cols * ($row + i) + $j ]} == 0 )); then
-			move_to $(( $row + i )) $j
+		if (( map[ cols * (row + i) + j ] == 0 )); then
+			move_to $(( row + i )) $j
 			print_background_square
 		fi
 	done
@@ -367,14 +369,31 @@ function do_on_key_up {
 	local i=0
 	local j=0
 
-	rotated=$(( $current_num % 4 < 3 ? $current_num + 1 : $current_num - 3 ))
+	local rotated=$(( current_num % 4 < 3 ? current_num + 1 : current_num - 3 ))
+	local offset=0
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			if (( ${blocks[ 16 * $rotated + 4 * i + j ]} == 1 )); then
-				if (( $row + i >= $rows || $col + j < 0 || $col + j >= $cols )); then
+			if (( blocks[ 16 * rotated + 4 * i + j ] == 1 )); then
+				if (( row + i >= rows )); then
 					return
 				fi
-				if (( ${map[ $cols * ($row + i) + $col + j ]} != 0 )); then
+
+				local tmp=0
+				if (( col + j < 0 )); then
+					tmp=$(( col + j ))
+					offset=$(( tmp < offset ? tmp : offset ))
+				fi
+				if (( col + j >= cols )); then
+					tmp=$(( col + j - cols + 1 ))
+					offset=$(( tmp > offset ? tmp : offset ))
+				fi
+			fi
+		done
+	done
+	for (( i = 0; i < 4; ++i )); do
+		for (( j = 0; j < 4; ++j )); do
+			if (( blocks[ 16 * rotated + 4 * i + j ] == 1 )); then
+				if (( map[ cols * (row + i) + col + j - offset ] != 0 )); then
 					return
 				fi
 			fi
@@ -383,8 +402,9 @@ function do_on_key_up {
 
 	current_num=$rotated
 	for (( i = 0; i < 16; ++i )); do
-		current[ $i ]=$(( ${blocks[ 16 * $rotated + i ]} ))
+		current[ $i ]=$(( blocks[ 16 * rotated + i ] ))
 	done
+	col=$(( col - offset ))
 	print_up_move
 }
 
@@ -401,11 +421,11 @@ function do_on_key_left {
 
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			if (( ${current[ 4 * j + i ]} == 1 )); then
-				if (( $col + i - 1 < 0 )); then
+			if (( current[ 4 * j + i ] == 1 )); then
+				if (( col + i - 1 < 0 )); then
 					break
 				fi
-				if (( ${map[ $cols * ($row + j) + $col + i - 1 ]} != 0 )); then
+				if (( map[ cols * (row + j) + col + i - 1 ] != 0 )); then
 					break
 				fi
 			fi
@@ -427,11 +447,11 @@ function do_on_key_right {
 
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			if (( ${current[ 4 * j + 3 - i ]} == 1 )); then
-				if (( $col + 4 - i >= $cols )); then
+			if (( current[ 4 * j + 3 - i ] == 1 )); then
+				if (( col + 4 - i >= cols )); then
 					break
 				fi
-				if (( ${map[ $cols * ($row + j) + $col + 4 - i ]} != 0 )); then
+				if (( map[ cols * (row + j) + col + 4 - i ] != 0 )); then
 					break
 				fi
 			fi
@@ -500,19 +520,19 @@ function calculate_distance {
 	local dist=$rows
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			if (( ${current[ 12 - 4 * j + i ]} == 1 )); then
+			if (( current[ 12 - 4 * j + i ] == 1 )); then
 				break
 			fi
 		done
 		if (( j == 4 )); then
 			continue
 		fi
-		for (( k = $row + 4 - j; k < $rows; ++k )); do
-			if (( ${map[ $cols * k + $col + i ]} != 0 )); then
+		for (( k = row + 4 - j; k < rows; ++k )); do
+			if (( map[ cols * k + col + i ] != 0 )); then
 				break
 			fi
 		done
-		dist=$(( k + j - $row - 4 < $dist ? k + j - $row - 4 : $dist ))
+		dist=$(( k + j - row - 4 < dist ? k + j - row - 4 : dist ))
 	done
 
 	return $dist
@@ -524,10 +544,10 @@ function calculate_distance {
 # $2: name of color number
 # $3: name of pattern array
 function generate_new_block {
-	let "$1=$(( $RANDOM % 28 ))"
-	let "$2=$(( $RANDOM % 7 + 1 ))"
+	let "$1=$(( RANDOM % 28 ))"
+	let "$2=$(( RANDOM % 7 + 1 ))"
 	for (( i = 0; i < 16; ++i )); do
-		let "$3[ $i ]=${blocks[ $(( 16 * $1 + i )) ]}"
+		let "$3[ $i ]=$(( blocks[ 16 * $1 + i ] ))"
 	done
 }
 
@@ -538,7 +558,7 @@ function write_to_map {
 
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			(( map[ $cols * ($row + i) + $col + j ] += ${current[ 4 * i + j ]} * $current_color ))
+			(( map[ cols * (row + i) + col + j ] += current[ 4 * i + j ] * current_color ))
 		done
 	done
 }
@@ -549,19 +569,19 @@ function decrease_lines {
 	local j=0
 	local k=0
 
-	for (( i = $rows - 1; i >= 0; )); do
-		for (( j = 0; j < $cols; ++j )); do
-			if (( ${map[ $cols * i + j ]} == 0 )); then
+	for (( i = rows - 1; i >= 0; )); do
+		for (( j = 0; j < cols; ++j )); do
+			if (( map[ cols * i + j ] == 0 )); then
 				break
 			fi
 		done
-		if (( j == $cols )); then
+		if (( j == cols )); then
 			for (( j = i; j > 0; --j )); do
-				for (( k = 0; k < $cols; ++k )); do
-					(( map[ $cols * j + k ] = ${map[ $cols * (j - 1) + k ]} ))
+				for (( k = 0; k < cols; ++k )); do
+					(( map[ cols * j + k ] = map[ cols * (j - 1) + k ] ))
 				done
 			done
-			for (( j = 0; j < $cols; ++j )); do
+			for (( j = 0; j < cols; ++j )); do
 				(( map[ j ] = 0 ))
 			done
 		else
@@ -579,8 +599,8 @@ function judge_game_over {
 
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			if (( ${next[ 4 * i + j ]} == 1 )); then
-				if (( ${map[ $cols * ($init_row + i) + $init_col + j ]} != 0 )); then
+			if (( next[ 4 * i + j ] == 1 )); then
+				if (( map[ cols * (init_row + i) + init_col + j ] != 0 )); then
 					break
 				fi
 			fi
@@ -603,7 +623,7 @@ function replace_current_with_next {
 	current_num=$next_num
 	current_color=$next_color
 	for (( i = 0; i < 16; ++i )); do
-		(( current[ i ] = ${next[ i ]} ))
+		(( current[ i ] = next[ i ] ))
 	done
 }
 
@@ -619,34 +639,34 @@ function init {
 
 	move_to_coordinate 1 1
 	print_background_char "+"
-	for (( i = 0; i < $cols; ++i )); do
+	for (( i = 0; i < cols; ++i )); do
 		print_background_char "--"
 	done
 	print_background_char "+\n"
-	for (( i = 0; i < $rows; ++i )); do
+	for (( i = 0; i < rows; ++i )); do
 		print_background_char "|"
-		for (( j = 0; j < $cols; ++j )); do
+		for (( j = 0; j < cols; ++j )); do
 			print_background_square
 		done
 		print_background_char "|\n"
 	done
 	print_background_char "+"
-	for (( i = 0; i < $cols; ++i )); do
+	for (( i = 0; i < cols; ++i )); do
 		print_background_char "--"
 	done
 	print_background_char "+\n"
 
-	move_to_coordinate 1 $(( $cols * 2 + 3 ))
+	move_to_coordinate 1 $(( cols * 2 + 3 ))
 	print_background_char "+--------+"
 	for (( i = 0; i < 4; ++i )); do
-		move_to_coordinate $(( 2 + i )) $(( $cols * 2 + 3 ))
+		move_to_coordinate $(( 2 + i )) $(( cols * 2 + 3 ))
 		print_background_char "|"
 		for (( j = 0; j < 4; ++j )); do
 			print_background_square
 		done
 		print_background_char "|"
 	done
-	move_to_coordinate 6 $(( $cols * 2 + 3 ))
+	move_to_coordinate 6 $(( cols * 2 + 3 ))
 	print_background_char "+--------+"
 }
 
@@ -662,15 +682,15 @@ function main {
 	while true; do
 		while true; do
 			local start=`date +%s%N`
-			local interval=$(( 1000 - $speed * 100 )) # In milliseconds
+			local interval=$(( 1000 - speed * 100 )) # In milliseconds
 
-			while (( `date +%s%N` - $start < $interval * 1000000 )); do
+			while (( `date +%s%N` - start < interval * 1000000 )); do
 				check_keyboard_hit
 
 				# If player hit down, give him 500ms to move around
 				if (( $? == 2 )); then
 					start=`date +%s%N`
-					while (( `date +%s%N` - $start < 500 * 1000000 )); do
+					while (( `date +%s%N` - start < 500 * 1000000 )); do
 						check_keyboard_hit
 					done
 					break
@@ -702,7 +722,7 @@ function main {
 		fi
 	done
 
-	restore_environment "Game over!!!"
+	restore_environment "Game over!!!" 0
 }
 
 main
