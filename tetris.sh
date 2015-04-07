@@ -16,47 +16,69 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+############################# OS relevant functions ############################
+
+# Get current time in milliseconds since the Epoch
+function get_millisecond_time {
+	case $OSTYPE in
+		# Linux or Cygwin
+		"linux-gnu" | "cygwin" )
+			date +%s%3N
+			;;
+
+		# OS X or FreeBSD
+		# Use python because fucking BSD's date does not work with +%N (#‵′)
+		"darwin"* | "freebsd"* )
+			python -c 'import time; print "%d" % (time.time() * 1000)'
+			;;
+
+		* )
+			restore_env "$0: unsupported operating system" 0
+			;;
+	esac
+}
+
 ############################# Shell operations #################################
 
 # Save terminal screen
 function save_screen {
-	echo -en "\e[?47h"
+	printf "\e[?47h"
 	clear
 }
 
 # Reload terminal screen
 function restore_screen {
 	clear
-	echo -en "\e[?47l"
+	printf "\e[?47l"
 }
 
 # Restore previous environment and exit
 #
 # $1: message to show before exit
 # $2: exit status
-function restore_environment {
+function restore_env {
 	restore_screen
 	stty sane
-	setterm -cursor on
+	tput cvvis # Show cursor
 	echo $1
 	exit $2
 }
 
 # Init game environment
-function init_environment {
+function init_env {
 	stty -echo
 	save_screen
-	setterm -cursor off
-	trap "restore_environment 'Game interrupted.' 0" SIGINT SIGQUIT
+	tput civis # Hide cursor
+	trap "restore_env 'Game interrupted.' 0" SIGINT SIGQUIT
 	trap "" SIGALRM
 }
 
 # Move cursor to (row, col)
 #
-# $1: row number ranging from 1 to `tputs lines`
-# $2: column number ranging from 1 to `tputs cols`
+# $1: row number ranging from 1 to `tput lines`
+# $2: column number ranging from 1 to `tput cols`
 function move_to_coordinate {
-	echo -en "\e[$1;$2f"
+	printf "\e[$1;$2f"
 }
 
 # Move cursor to map(row, col)
@@ -75,14 +97,13 @@ function init_data {
 	local j=0
 
 	# Width and height
-	rows=20
-	cols=10
+	readonly rows=20
+	readonly cols=10
 	if (( rows < 4 || cols < 4 )); then
-		restore_environment "$0: the size of the game map is too small" 1
+		restore_env "$0: the size of the game map is too small" 1
 	fi
 	if (( `tput lines` < rows + 2 || `tput cols` < cols * 2 + 12 )); then
-		restore_environment "$0: the size of this terminal is too small\
-			 to run this game" 1
+		restore_env "$0: the size of this terminal is too small" 1
 	fi
 
 	# Initialize game map
@@ -136,6 +157,7 @@ function init_data {
 		0 1 0 0 1 1 1 0 0 0 0 0 0 0 0 0
 		0 1 0 0 1 1 0 0 0 1 0 0 0 0 0 0
 	)
+	readonly -a blocks
 
 	# Current block and next block information
 	current=(
@@ -156,8 +178,8 @@ function init_data {
 	next_color=0
 
 	# Initial coordinate of block in map
-	init_row=0
-	init_col=$(( (cols - 4) / 2 ))
+	readonly init_row=0
+	readonly init_col=$(( (cols - 4) / 2 ))
 	row=$init_row
 	col=$init_col
 
@@ -165,11 +187,11 @@ function init_data {
 	speed=0
 
 	# Keyboard control strings
-	esc=`echo -en "\e"`
-	up=`echo -en "[A"`
-	down=`echo -en "[B"`
-	left=`echo -en "[D"`
-	right=`echo -en "[C"`
+	readonly esc=`printf "\e"`
+	readonly up=`printf "[A"`
+	readonly down=`printf "[B"`
+	readonly left=`printf "[D"`
+	readonly right=`printf "[C"`
 }
 
 ############################# Printing methods #################################
@@ -178,7 +200,7 @@ function init_data {
 #
 # $1: color ranging from 0 to 7
 function print_square {
-	echo -en "\e[0;$(( $1 + 30 ));$(( $1 + 40 ))m  \e[m"
+	printf "\e[0;$(( $1 + 30 ));$(( $1 + 40 ))m  \e[m"
 }
 
 # Print a square using background color
@@ -190,7 +212,7 @@ function print_background_square {
 #
 # $1: a string
 function print_background_char {
-	echo -en "\e[1;37;40m$1\e[m"
+	printf "\e[1;37;40m$1\e[m"
 }
 
 # Print a block
@@ -633,7 +655,7 @@ function init {
 	local i=0
 	local j=0
 
-	init_environment
+	init_env
 	init_data
 
 	move_to_coordinate 1 1
@@ -680,16 +702,16 @@ function main {
 
 	while true; do
 		while true; do
-			local start=`date +%s%N`
+			local start=`get_millisecond_time`
 			local interval=$(( 1000 - speed * 100 )) # In milliseconds
 
-			while (( `date +%s%N` - start < interval * 1000000 )); do
+			while (( `get_millisecond_time` - start < interval )); do
 				check_keyboard_hit
 
 				# If player hit down, give him 500ms to move around
 				if (( $? == 2 )); then
-					start=`date +%s%N`
-					while (( `date +%s%N` - start < 500 * 1000000 )); do
+					start=`get_millisecond_time`
+					while (( `get_millisecond_time` - start < 500 )); do
 						check_keyboard_hit
 					done
 					break
@@ -721,7 +743,7 @@ function main {
 		fi
 	done
 
-	restore_environment "Game over!!!" 0
+	restore_env "Game over!!!" 0
 }
 
-main
+main $@
