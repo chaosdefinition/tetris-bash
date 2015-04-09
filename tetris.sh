@@ -18,6 +18,18 @@
 
 ############################# OS relevant functions ############################
 
+function filter_os {
+	case $OSTYPE in
+		"linux-gnu" | "cygwin" | "darwin"* | "freebsd"* )
+			;;
+
+		* )
+			echo "$0: unsupported operating system"
+			exit 0
+			;;
+	esac
+}
+
 # Get current time in milliseconds since the Epoch
 function get_millisecond_time {
 	case $OSTYPE in
@@ -29,11 +41,7 @@ function get_millisecond_time {
 		# OS X or FreeBSD
 		# Use python because fucking BSD's date does not work with +%N (#‵′)
 		"darwin"* | "freebsd"* )
-			python -c 'import time; print "%d" % (time.time() * 1000)'
-			;;
-
-		* )
-			restore_env "$0: unsupported operating system" 0
+			python -c 'import time;print"%d"%(time.time()*1000)' 2> /dev/null
 			;;
 	esac
 }
@@ -52,23 +60,47 @@ function restore_screen {
 	printf "\e[?47l"
 }
 
+# Set the title of terminal
+#
+# $1: title
+function set_title {
+	printf "\e]0;$1\a"
+}
+
 # Restore previous environment and exit
 #
 # $1: message to show before exit
 # $2: exit status
 function restore_env {
 	restore_screen
-	stty sane
-	tput cvvis # Show cursor
+
+	# Show cursor
+	tput cvvis
+
+	# Restore old tty settings
+	stty $old_tty_settings
+
 	echo $1
 	exit $2
 }
 
 # Init game environment
 function init_env {
-	stty -echo
+	# Save old tty settings
+	old_tty_settings=`stty -g`
+
+	# Turn off echoing and set read time as small as possible
+	# Use this because Bash under version 4 does not
+	# support fractional timeout of 'read' but we do need this
+	stty -echo -icanon min 0 time 1
+
+	# Hide cursor
+	tput civis
+
 	save_screen
-	tput civis # Hide cursor
+	set_title "Tetris"
+
+	# Catch SIGINT and SIGQUIT, ignore SIGALRM
 	trap "restore_env 'Game interrupted.' 0" SIGINT SIGQUIT
 	trap "" SIGALRM
 }
@@ -491,35 +523,28 @@ function do_on_key_right {
 #
 # return: 1, 2, 3, 4 or 0 each corresponding to up, down, left, right or others
 function check_keyboard_hit {
-	read -s -n 1 -t 0.3
-	case $REPLY in
-		$esc )
-			read -s -n 2 -t 0.001
-			case $REPLY in
-				$up )
-					do_on_key_up
-					return 1
-					;;
+	local key=`head -c1`
+	[[ $key == $esc ]] || return 0
+	key=`head -c2`
+	case $key in
+		$up )
+			do_on_key_up
+			return 1
+			;;
 
-				$down )
-					do_on_key_down
-					return 2
-					;;
+		$down )
+			do_on_key_down
+			return 2
+			;;
 
-				$left )
-					do_on_key_left
-					return 3
-					;;
+		$left )
+			do_on_key_left
+			return 3
+			;;
 
-				$right )
-					do_on_key_right
-					return 4
-					;;
-
-				* )
-					return 0
-					;;
-			esac
+		$right )
+			do_on_key_right
+			return 4
 			;;
 
 		* )
@@ -746,4 +771,5 @@ function main {
 	restore_env "Game over!!!" 0
 }
 
+filter_os
 main $@
