@@ -18,9 +18,10 @@
 
 ############################# OS relevant functions ############################
 
+# Filter off unsupported os or platform
 function filter_os {
 	case $OSTYPE in
-		"linux-gnu" | "cygwin" | "darwin"* | "freebsd"* )
+		"linux-gnu" | "darwin"* | "freebsd"* )
 			;;
 
 		* )
@@ -33,8 +34,8 @@ function filter_os {
 # Get current time in milliseconds since the Epoch
 function get_millisecond_time {
 	case $OSTYPE in
-		# Linux or Cygwin
-		"linux-gnu" | "cygwin" )
+		# Linux
+		"linux-gnu" )
 			date +%s%3N
 			;;
 
