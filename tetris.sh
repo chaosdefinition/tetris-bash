@@ -20,30 +20,30 @@
 
 # Filter off unsupported os or platform
 function filter_os {
-	case $OSTYPE in
-		"linux-gnu" | "darwin"* | "freebsd"* )
-			;;
+	case "$OSTYPE" in
+	"linux-gnu" | "darwin"* | "freebsd"* )
+		;;
 
-		* )
-			echo "$0: unsupported operating system"
-			exit 0
-			;;
+	* )
+		printf "$0: unsupported operating system\n"
+		exit 0
+		;;
 	esac
 }
 
 # Get current time in milliseconds since the Epoch
 function get_millisecond_time {
-	case $OSTYPE in
-		# Linux
-		"linux-gnu" )
-			date +%s%3N
-			;;
+	case "$OSTYPE" in
+	# Linux
+	"linux-gnu" )
+		date +%s%3N
+		;;
 
-		# OS X or FreeBSD
-		# Use python because fucking BSD's date does not work with +%N (#‵′)
-		"darwin"* | "freebsd"* )
-			python -c 'import time;print"%d"%(time.time()*1000)' 2> /dev/null
-			;;
+	# OS X or FreeBSD
+	# Use python because fucking BSD's date does not work with +%N (#‵′)
+	"darwin"* | "freebsd"* )
+		python -c 'import time;print"%d"%(time.time()*1000)' 2> /dev/null
+		;;
 	esac
 }
 
@@ -79,10 +79,10 @@ function restore_env {
 	tput cvvis
 
 	# Restore old tty settings
-	stty $old_tty_settings
+	stty "$old_tty_settings"
 
-	echo $1
-	exit $2
+	printf "$1\n"
+	exit "$2"
 }
 
 # Init game environment
@@ -213,8 +213,8 @@ function init_data {
 	# Initial coordinate of block in map
 	readonly init_row=0
 	readonly init_col=$(( (cols - 4) / 2 ))
-	row=$init_row
-	col=$init_col
+	row="$init_row"
+	col="$init_col"
 
 	# Initial speed (ranging from 0 to 10)
 	speed=0
@@ -262,7 +262,7 @@ function print_block {
 		for (( j = 0; j < 4; ++j )); do
 			move_to $(( $1 + i )) $(( $2 + j ))
 			if (( $4[ 4 * i + j ] == 1 )); then
-				print_square $3
+				print_square "$3"
 			else
 				if (( map[ cols * ($1 + i) + $2 + j ] != 0 )); then
 					print_square $(( map[ cols * ($1 + i) + $2 + j ] ))
@@ -281,9 +281,9 @@ function print_next_block {
 
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
-			move_to_coordinate $(( i + 2 )) $(( 2 * cols + 2 * j + 4 ))
+			move_to_coordinate $(( i + 2 )) $(( 2 * (cols + j + 2) ))
 			if (( next[ 4 * i + j ] == 1 )); then
-				print_square $next_color
+				print_square "$next_color"
 			else
 				print_background_square
 			fi
@@ -298,7 +298,7 @@ function print_map {
 
 	for (( i = 0; i < rows; ++i )); do
 		for (( j = 0; j < cols; ++j )); do
-			move_to $i $j
+			move_to "$i" "$j"
 			if (( map[ cols * i + j ] == 0 )); then
 				print_background_square
 			else
@@ -323,7 +323,7 @@ function print_up_move {
 			fi
 			move_to $(( row + i )) $(( col + j ))
 			if (( current[ 4 * i + j ] != 0 )); then
-				print_square $current_color
+				print_square "$current_color"
 			else
 				if (( map[ cols * (row + i) + col + j ] != 0 )); then
 					print_square $(( map[ cols * (row + i) + col + j ] ))
@@ -368,7 +368,7 @@ function print_down_move {
 			fi
 			move_to $(( row + i )) $(( col + j ))
 			if (( current[ 4 * i + j ] != 0 )); then
-				print_square $current_color
+				print_square "$current_color"
 			else
 				if (( map[ cols * (row + i) + col + j ] != 0 )); then
 					print_square $(( map[ cols * (row + i) + col + j ] ))
@@ -397,7 +397,7 @@ function print_horizontal_move {
 			fi
 			move_to $(( row + i )) $(( col + j ))
 			if (( current[ 4 * i + j ] != 0 )); then
-				print_square $current_color
+				print_square "$current_color"
 			else
 				if (( map[ cols * (row + i) + col + j ] != 0 )); then
 					print_square $(( map[ cols * (row + i) + col + j ] ))
@@ -411,7 +411,7 @@ function print_horizontal_move {
 			continue
 		fi
 		if (( map[ cols * (row + i) + j ] == 0 )); then
-			move_to $(( row + i )) $j
+			move_to $(( row + i )) "$j"
 			print_background_square
 		fi
 	done
@@ -454,7 +454,7 @@ function do_on_key_up {
 		done
 	done
 
-	current_num=$rotated
+	current_num="$rotated"
 	for (( i = 0; i < 16; ++i )); do
 		(( current[ i ] = blocks[ 16 * rotated + i ] ))
 	done
@@ -465,7 +465,7 @@ function do_on_key_up {
 # Stuffs to do when down key is hit
 function do_on_key_down {
 	calculate_distance
-	print_down_move $?
+	print_down_move "$?"
 }
 
 # Stuffs to do when left key is hit
@@ -525,32 +525,32 @@ function do_on_key_right {
 # return: 1, 2, 3, 4 or 0 each corresponding to up, down, left, right or others
 function check_keyboard_hit {
 	local key=`head -c1`
-	[[ $key == $esc ]] || return 0
+	[[ "$key" == "$esc" ]] || return 0
 	key=`head -c2`
-	case $key in
-		$up )
-			do_on_key_up
-			return 1
-			;;
+	case "$key" in
+	"$up" )
+		do_on_key_up
+		return 1
+		;;
 
-		$down )
-			do_on_key_down
-			return 2
-			;;
+	"$down" )
+		do_on_key_down
+		return 2
+		;;
 
-		$left )
-			do_on_key_left
-			return 3
-			;;
+	"$left" )
+		do_on_key_left
+		return 3
+		;;
 
-		$right )
-			do_on_key_right
-			return 4
-			;;
+	"$right" )
+		do_on_key_right
+		return 4
+		;;
 
-		* )
-			return 0
-			;;
+	* )
+		return 0
+		;;
 	esac
 }
 
@@ -564,7 +564,7 @@ function calculate_distance {
 	local j=0
 	local k=0
 
-	local dist=$rows
+	local dist="$rows"
 	for (( i = 0; i < 4; ++i )); do
 		for (( j = 0; j < 4; ++j )); do
 			if (( current[ 12 - 4 * j + i ] == 1 )); then
@@ -667,8 +667,8 @@ function judge_game_over {
 function replace_current_with_next {
 	local i=0
 
-	current_num=$next_num
-	current_color=$next_color
+	current_num="$next_num"
+	current_color="$next_color"
 	for (( i = 0; i < 16; ++i )); do
 		(( current[ i ] = next[ i ] ))
 	done
@@ -723,7 +723,7 @@ function main {
 
 	generate_new_block current_num current_color current
 	generate_new_block next_num next_color next
-	print_block $row $col $current_color current
+	print_block "$row" "$col" "$current_color" current
 	print_next_block
 
 	while true; do
@@ -762,9 +762,9 @@ function main {
 		else
 			replace_current_with_next
 			generate_new_block next_num next_color next
-			row=$init_row
-			col=$init_col
-			print_block $row $col $current_color current
+			row="$init_row"
+			col="$init_col"
+			print_block "$row" "$col" "$current_color" current
 			print_next_block
 		fi
 	done
