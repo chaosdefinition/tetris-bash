@@ -19,9 +19,13 @@
 ############################# OS relevant functions ############################
 
 # Filter off unsupported os or platform
-function filter_os {
+function filter_os_and_bash {
 	case "$OSTYPE" in
-	"linux-gnu" | "darwin"* | "freebsd"* )
+	"linux-gnu" | "darwin"* | "freebsd"* | "msys" )
+		if (( BASH_VERSINFO[ 0 ] < 4 )); then
+			printf "$0: unsupported bash version\n"
+			exit 0
+		fi
 		;;
 
 	* )
@@ -35,7 +39,7 @@ function filter_os {
 function get_millisecond_time {
 	case "$OSTYPE" in
 	# Linux
-	"linux-gnu" )
+	"linux-gnu" | "msys" )
 		date +%s%3N
 		;;
 
@@ -90,10 +94,8 @@ function init_env {
 	# Save old tty settings
 	old_tty_settings=`stty -g`
 
-	# Turn off echoing and set read time as small as possible
-	# Use this because Bash under version 4 does not
-	# support fractional timeout of 'read' but we do need this
-	stty -echo -icanon min 0 time 1
+	# Turn off echoing
+	stty -echo
 
 	# Hide cursor
 	tput civis
@@ -103,7 +105,7 @@ function init_env {
 
 	# Catch SIGINT and SIGQUIT, ignore SIGALRM
 	trap "restore_env 'Game interrupted.' 0" SIGINT SIGQUIT
-	trap "" SIGALRM
+	trap "" SIGALRM SIGTSTP
 }
 
 # Move cursor to (row, col)
@@ -524,10 +526,10 @@ function do_on_key_right {
 #
 # return: 1, 2, 3, 4 or 0 each corresponding to up, down, left, right or others
 function check_keyboard_hit {
-	local key=`head -c1`
-	[[ "$key" == "$esc" ]] || return 0
-	key=`head -c2`
-	case "$key" in
+	read -s -n 1 -t 0.3
+	[[ "$REPLY" == "$esc" ]] || return 0
+	read -s -n 2 -t 0.001
+	case "$REPLY" in
 	"$up" )
 		do_on_key_up
 		return 1
@@ -772,5 +774,5 @@ function main {
 	restore_env "Game over!!!" 0
 }
 
-filter_os
+filter_os_and_bash
 main $@
